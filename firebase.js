@@ -1,4 +1,3 @@
-// firebase.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { 
     getFirestore, 
@@ -7,31 +6,45 @@ import {
     addDoc, 
     updateDoc, 
     deleteDoc, 
-    doc 
+    doc,
+    query,
+    orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { 
+    getAuth, 
+    createUserWithEmailAndPassword, 
+    signInWithEmailAndPassword, 
+    signOut,
+    onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 let firebaseConfig;
 
 try {
-    // 1. On essaie de charger la config locale (gitignored)
     const module = await import('./config.js');
     firebaseConfig = module.firebaseConfig;
-    console.log("✅ Configuration chargée depuis config.js (Local)");
+    console.log("✅ Config locale trouvée");
 } catch (e) {
-    // 2. Si échec (fichier absent), on charge la config de build/prod
-    console.warn("⚠️ config.js non trouvé, tentative avec build-config.js...");
+    console.warn("⚠️ config.js introuvable ou erreur d'import, tentative avec build-config...");
     try {
         const module = await import('./build-config.js');
         firebaseConfig = module.firebaseConfig;
-        console.log("✅ Configuration chargée depuis build-config.js");
+        console.log("✅ Config build trouvée");
     } catch (error) {
-        console.error("❌ Aucune configuration trouvée (ni config.js, ni build-config.js). L'app va planter.");
-        throw error;
+        console.error("❌ Aucune config trouvée");
     }
 }
 
-// Initialisation avec la config trouvée
+// Vérification de sécurité avant d'initialiser
+if (!firebaseConfig) {
+    const msg = "ERREUR CRITIQUE : La configuration Firebase est vide ou manquante. Vérifiez que 'config.js' contient bien 'export { firebaseConfig };' à la fin.";
+    console.error(msg);
+    alert(msg);
+    throw new Error(msg);
+}
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
-export { db, collection, getDocs, addDoc, updateDoc, deleteDoc, doc };
+export { db, auth, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged };
