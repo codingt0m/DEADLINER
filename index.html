@@ -29,24 +29,30 @@
 </head>
 <body class="bg-app-bg text-app-text h-screen flex flex-col overflow-hidden select-none">
 
-    <div id="auth-container" class="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6 hidden">
+    <div id="auth-container" class="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6">
         <div class="w-full max-w-sm text-center">
             <h1 class="text-4xl font-bold text-brand mb-2 tracking-tighter">Deadliner</h1>
-            <p class="text-gray-400 mb-8">Gérez vos échéances avec style.</p>
+            <p class="text-gray-400 mb-8">Qui est-ce ?</p>
             
-            <form id="auth-form" class="space-y-4">
-                <input type="email" id="auth-email" placeholder="Email" required class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none">
-                <input type="password" id="auth-password" placeholder="Mot de passe" required class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none">
-                <button type="submit" class="w-full py-4 bg-black text-white font-bold rounded-xl shadow-lg hover:scale-[1.02] transition-transform">
-                    <span id="auth-btn-text">Se connecter</span>
+            <div id="profiles-list" class="space-y-3">
+                <button class="profile-btn w-full p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center hover:bg-white hover:border-brand hover:shadow-md transition-all group" data-id="default_profile_1">
+                    <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold mr-4 text-sm">P1</div>
+                    <span class="font-bold text-gray-700 group-hover:text-brand">Profil 1</span>
+                    <i class="ph ph-caret-right ml-auto text-gray-300 group-hover:text-brand"></i>
                 </button>
-            </form>
-            
-            <p class="mt-6 text-sm text-gray-500">
-                <span id="auth-switch-text">Pas de compte ?</span>
-                <button id="auth-switch-btn" class="text-brand font-bold hover:underline">Créer un compte</button>
-            </p>
-            <div id="auth-error" class="text-red-500 text-sm mt-4 hidden"></div>
+
+                <button class="profile-btn w-full p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center hover:bg-white hover:border-brand hover:shadow-md transition-all group" data-id="default_profile_2">
+                    <div class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold mr-4 text-sm">P2</div>
+                    <span class="font-bold text-gray-700 group-hover:text-brand">Profil 2</span>
+                    <i class="ph ph-caret-right ml-auto text-gray-300 group-hover:text-brand"></i>
+                </button>
+
+                <button class="profile-btn w-full p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center hover:bg-white hover:border-brand hover:shadow-md transition-all group" data-id="default_profile_3">
+                    <div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold mr-4 text-sm">P3</div>
+                    <span class="font-bold text-gray-700 group-hover:text-brand">Profil 3</span>
+                    <i class="ph ph-caret-right ml-auto text-gray-300 group-hover:text-brand"></i>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -54,8 +60,8 @@
         <div class="flex items-center justify-between mb-2">
             <h1 class="text-xl font-bold tracking-tight text-brand">Deadliner</h1>
             <div class="flex items-center gap-3">
-                <div id="date-display" class="text-xs font-mono text-gray-400"></div>
-                <button id="logout-btn" class="text-gray-400 hover:text-red-500"><i class="ph ph-sign-out text-lg"></i></button>
+                <div id="current-profile-name" class="text-xs font-bold px-2 py-1 bg-gray-100 rounded text-gray-500"></div>
+                <button id="logout-btn" class="text-gray-400 hover:text-red-500"><i class="ph ph-users text-lg"></i></button>
             </div>
         </div>
         <div class="relative">
@@ -87,11 +93,11 @@
         <div id="view-projects" class="hidden p-4">
             <h2 class="text-lg font-bold mb-4">Mes Dossiers</h2>
             <div id="projects-grid" class="grid grid-cols-2 gap-4">
-                </div>
+            </div>
             
             <h2 class="text-lg font-bold mb-4 mt-8">Mes Tags</h2>
             <div id="tags-list" class="flex flex-wrap gap-2">
-                </div>
+            </div>
 
             <div class="mt-8 p-4 bg-white rounded-xl border border-dashed border-gray-300">
                 <h3 class="text-sm font-bold text-gray-500 mb-2">Création rapide</h3>

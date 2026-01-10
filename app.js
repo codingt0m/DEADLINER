@@ -1,5 +1,5 @@
-import { db, auth, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase.js';
-
+import { db, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from './firebase.js';
+console.log("🚀 Firebase imported successfully");
 // --- CONFIG ---
 const COLORS_CONFIG = {
     'blue': 'text-blue-600',
@@ -20,7 +20,7 @@ const FOLDER_COLORS = {
 // --- STORE (Gestion des données) ---
 class Store {
     constructor() {
-        this.user = null;
+        this.user = null; // Contiendra { uid: "default_profile_x", name: "Profil X" }
         this.tasks = [];
         this.deadlines = [];
         this.folders = [];
@@ -148,11 +148,12 @@ class UI {
             nav: document.getElementById('app-nav'),
             fab: document.getElementById('fab-add'),
             projectGrid: document.getElementById('projects-grid'),
-            tagsList: document.getElementById('tags-list')
+            tagsList: document.getElementById('tags-list'),
+            currentProfileName: document.getElementById('current-profile-name')
         };
     }
 
-    showAuth() {
+    showProfiles() {
         this.els.authContainer.classList.remove('hidden');
         this.els.mainContent.classList.add('hidden');
         this.els.header.classList.add('hidden');
@@ -168,6 +169,10 @@ class UI {
         this.els.nav.classList.remove('hidden');
         this.els.fab.classList.remove('hidden');
         this.els.filters.classList.remove('hidden');
+        
+        // Afficher le nom du profil
+        this.els.currentProfileName.innerText = this.store.user.name;
+
         this.render();
     }
 
@@ -390,47 +395,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     const store = new Store();
     const ui = new UI(store);
     
-    // Auth Listener
-    onAuthStateChanged(auth, async (user) => {
-        if(user) {
+    // GESTION PROFILES
+    const profiles = document.querySelectorAll('.profile-btn');
+    profiles.forEach(btn => {
+        btn.onclick = async () => {
+            const profileId = btn.dataset.id;
+            const profileName = btn.querySelector('span').innerText;
+            
+            // Simuler l'authentification
+            const user = { uid: profileId, name: profileName };
+            
             await store.init(user);
             ui.showApp();
-        } else {
-            ui.showAuth();
-        }
+        };
     });
 
-    // Auth Form Logic
-    let isLogin = true;
-    const authForm = document.getElementById('auth-form');
-    const switchBtn = document.getElementById('auth-switch-btn');
-    const authError = document.getElementById('auth-error');
-    
-    switchBtn.onclick = (e) => {
-        e.preventDefault();
-        isLogin = !isLogin;
-        document.getElementById('auth-btn-text').innerText = isLogin ? "Se connecter" : "S'inscrire";
-        document.getElementById('auth-switch-text').innerText = isLogin ? "Pas de compte ?" : "Déjà un compte ?";
-        switchBtn.innerText = isLogin ? "Créer un compte" : "Se connecter";
-        authError.classList.add('hidden');
+    // Logout logic (Retour au choix du profil)
+    document.getElementById('logout-btn').onclick = () => {
+        store.user = null;
+        ui.showProfiles();
     };
-
-    authForm.onsubmit = async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('auth-email').value;
-        const password = document.getElementById('auth-password').value;
-        authError.classList.add('hidden');
-
-        try {
-            if(isLogin) await signInWithEmailAndPassword(auth, email, password);
-            else await createUserWithEmailAndPassword(auth, email, password);
-        } catch (err) {
-            authError.innerText = "Erreur : " + err.message;
-            authError.classList.remove('hidden');
-        }
-    };
-
-    document.getElementById('logout-btn').onclick = () => signOut(auth);
 
     // Initial Nav Setup
     setupNav(ui);
