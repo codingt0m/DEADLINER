@@ -1,6 +1,16 @@
+/* build-config.js */
 const fs = require('fs');
+const path = require('path');
 
-// On récupère les variables définies dans Vercel
+// 1. Définition du dossier de sortie (standard Vercel)
+const outputDir = '.';
+
+// Création du dossier s'il n'existe pas
+if (!fs.existsSync(outputDir)){
+    fs.mkdirSync(outputDir);
+}
+
+// 2. Génération du contenu de config.js avec les variables d'environnement
 const configContent = `// Fichier généré automatiquement par Vercel
 const firebaseConfig = {
   apiKey: "${process.env.FIREBASE_API_KEY}",
@@ -9,8 +19,30 @@ const firebaseConfig = {
   storageBucket: "${process.env.FIREBASE_STORAGE_BUCKET}",
   messagingSenderId: "${process.env.FIREBASE_MESSAGING_SENDER_ID}",
   appId: "${process.env.FIREBASE_APP_ID}"
-};`;
+};
 
-// On écrit le fichier config.js pour que le navigateur puisse le lire
-fs.writeFileSync('./config.js', configContent);
-console.log('✅ config.js a été généré avec succès !');
+export { firebaseConfig };`;
+
+// Écriture de config.js DANS le dossier public
+fs.writeFileSync(path.join(outputDir, 'config.js'), configContent);
+console.log('✅ public/config.js généré.');
+
+// 3. Liste des fichiers statiques à copier vers public
+const filesToCopy = [
+    'index.html', 
+    'style.css', 
+    'app.js', 
+    'firebase.js'
+];
+
+// Copie des fichiers
+filesToCopy.forEach(file => {
+    if (fs.existsSync(file)) {
+        fs.copyFileSync(file, path.join(outputDir, file));
+        console.log(`➡️ Copié : ${file}`);
+    } else {
+        console.warn(`⚠️ Attention : Fichier source ${file} introuvable.`);
+    }
+});
+
+console.log('🎉 Build terminé : Site prêt dans le dossier /public');
