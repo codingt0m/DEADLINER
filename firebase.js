@@ -7,6 +7,8 @@ import {
     updateDoc, 
     deleteDoc, 
     doc,
+    getDoc, // Ajouté
+    setDoc, // Ajouté
     query,
     orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -47,4 +49,5 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-export { db, auth, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged };
+// Export mis à jour avec getDoc et setDoc
+export { db, auth, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, query, orderBy, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged };

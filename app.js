@@ -1,5 +1,6 @@
-import { db, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from './firebase.js';
+import { db, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, query, orderBy } from './firebase.js';
 console.log("🚀 Firebase imported successfully");
+
 // --- CONFIG ---
 const COLORS_CONFIG = {
     'blue': 'text-blue-600',
@@ -14,13 +15,70 @@ const FOLDER_COLORS = {
     'red': 'bg-red-100 text-red-700',
     'green': 'bg-green-100 text-green-700',
     'purple': 'bg-purple-100 text-purple-700',
-    'gray': 'bg-gray-100 text-gray-700'
+    'gray': 'bg-gray-100 text-gray-700',
+    'yellow': 'bg-yellow-100 text-yellow-700'
 };
 
-// --- STORE (Gestion des données) ---
+const FOLDER_ICON_COLORS = {
+    'blue': 'text-blue-400',
+    'red': 'text-red-400',
+    'green': 'text-green-400',
+    'purple': 'text-purple-400',
+    'gray': 'text-gray-400',
+    'yellow': 'text-yellow-400'
+};
+
+// --- HELPERS GLOBAUX ---
+const hexToRgba = (hex, alpha) => {
+    let r = 0, g = 0, b = 0;
+    if (hex.startsWith('#')) hex = hex.slice(1);
+    if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+    } else if (hex.length === 6) {
+        r = parseInt(hex.substring(0, 2), 16);
+        g = parseInt(hex.substring(2, 4), 16);
+        b = parseInt(hex.substring(4, 6), 16);
+    }
+    return `rgba(${r},${g},${b},${alpha})`;
+};
+
+const updateHomeProfileButton = (id, name, color) => {
+    const btn = document.querySelector(`.profile-btn[data-id="${id}"]`);
+    if (!btn) return;
+    const span = btn.querySelector('span');
+    if (span && name) span.innerText = name;
+    const iconDiv = btn.querySelector('div:first-child');
+    if (iconDiv && color) {
+        if (color.startsWith('#')) {
+            const bg = hexToRgba(color, 0.15);
+            iconDiv.className = `w-10 h-10 rounded-full flex items-center justify-center font-bold mr-4 text-sm transition-colors`;
+            iconDiv.style.backgroundColor = bg;
+            iconDiv.style.color = color;
+        } else {
+            iconDiv.style = '';
+            const colorMap = {
+                'blue': ['bg-blue-100', 'text-blue-600'],
+                'purple': ['bg-purple-100', 'text-purple-600'],
+                'green': ['bg-green-100', 'text-green-600'],
+                'red': ['bg-red-100', 'text-red-600'],
+                'yellow': ['bg-yellow-100', 'text-yellow-600']
+            };
+            const classes = colorMap[color] || colorMap['blue'];
+            iconDiv.className = `w-10 h-10 rounded-full flex items-center justify-center font-bold mr-4 text-sm transition-colors ${classes.join(' ')}`;
+        }
+    }
+};
+
+const vibrate = (ms = 50) => {
+    if (navigator.vibrate) navigator.vibrate(ms);
+};
+
+// --- STORE ---
 class Store {
     constructor() {
-        this.user = null; // Contiendra { uid: "default_profile_x", name: "Profil X" }
+        this.user = null;
         this.tasks = [];
         this.deadlines = [];
         this.folders = [];
@@ -28,49 +86,61 @@ class Store {
         this.currentDate = new Date();
     }
 
-    // Récupère le chemin d'une sous-collection de l'utilisateur
-    col(name) {
-        return collection(db, `users/${this.user.uid}/${name}`);
+    col(name) { return collection(db, `users/${this.user.uid}/${name}`); }
+
+    async init(userParams) {
+        try {
+            const userDocRef = doc(db, 'users', userParams.uid);
+            const userSnap = await getDoc(userDocRef);
+            if (userSnap.exists()) {
+                const data = userSnap.data();
+                this.user = { uid: userParams.uid, name: data.name || userParams.name, color: data.color || 'blue' };
+            } else {
+                this.user = { uid: userParams.uid, name: userParams.name, color: 'blue' };
+                await setDoc(userDocRef, { name: this.user.name, color: this.user.color });
+            }
+        } catch (e) {
+            console.error("Erreur init user:", e);
+            this.user = { ...userParams, color: 'blue' }; 
+        }
+        updateHomeProfileButton(this.user.uid, this.user.name, this.user.color);
+        await this.refresh();
     }
 
-    async init(user) {
-        this.user = user;
-        await this.refresh();
+    async updateProfile(newName, newColor) {
+        if (!this.user) return;
+        try {
+            await setDoc(doc(db, 'users', this.user.uid), { name: newName, color: newColor }, { merge: true });
+            this.user.name = newName;
+            this.user.color = newColor;
+            updateHomeProfileButton(this.user.uid, newName, newColor);
+            return true;
+        } catch (e) { return false; }
     }
 
     async refresh() {
         if (!this.user) return;
         try {
-            // Fetch All parallel
             const [dlSnap, tkSnap, foSnap, tgSnap] = await Promise.all([
                 getDocs(query(this.col('deadlines'))),
                 getDocs(query(this.col('tasks'))),
                 getDocs(query(this.col('folders'))),
                 getDocs(query(this.col('tags')))
             ]);
-
             this.deadlines = dlSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(a.date) - new Date(b.date));
             this.tasks = tkSnap.docs.map(t => ({ id: t.id, ...t.data() }));
             this.folders = foSnap.docs.map(f => ({ id: f.id, ...f.data() }));
             this.tags = tgSnap.docs.map(t => ({ id: t.id, ...t.data() }));
-
-        } catch (e) {
-            console.error("Erreur chargement:", e);
-        }
+        } catch (e) { console.error("Erreur chargement:", e); }
     }
 
-    // GETTERS
     getTasksForDeadline(dlId) { return this.tasks.filter(t => t.deadlineId === dlId); }
     getOrphanTasks() { return this.tasks.filter(t => !t.deadlineId); }
     getFolder(id) { return this.folders.find(f => f.id === id); }
     getTag(id) { return this.tags.find(t => t.id === id); }
 
-    // ACTIONS
-    async addDeadline(data) {
-        await addDoc(this.col("deadlines"), data);
-        await this.refresh();
-    }
-
+    async addDeadline(data) { await addDoc(this.col("deadlines"), data); await this.refresh(); }
+    
     async addTask(data) {
         const task = {
             title: data.title,
@@ -81,6 +151,7 @@ class Store {
             deadlineId: data.deadlineId || null,
             folderId: data.folderId || null,
             tagId: data.tagId || null,
+            date: data.taskDate || null,
             description: data.description || '',
             duration: parseInt(data.duration) || 0,
             createdAt: new Date().toISOString()
@@ -88,41 +159,49 @@ class Store {
         await addDoc(this.col("tasks"), task);
         await this.refresh();
     }
-
-    async addFolder(name) {
-        await addDoc(this.col("folders"), { name, color: 'gray', createdAt: new Date().toISOString() });
-        await this.refresh();
+    
+    // Modification: Accepte un paramètre couleur
+    async addFolder(name, color = 'gray') { 
+        await addDoc(this.col("folders"), { name, color, createdAt: new Date().toISOString() }); 
+        await this.refresh(); 
     }
-
-    async addTag(name) {
-        await addDoc(this.col("tags"), { name, color: 'blue', createdAt: new Date().toISOString() });
-        await this.refresh();
-    }
+    
+    async addTag(name) { await addDoc(this.col("tags"), { name, color: 'blue', createdAt: new Date().toISOString() }); await this.refresh(); }
 
     async toggleTask(id) {
         const task = this.tasks.find(t => t.id === id);
         if(!task) return;
         task.done = !task.done;
+        if(task.done) vibrate(100); 
+        else vibrate(50);
         await updateDoc(doc(db, `users/${this.user.uid}/tasks`, id), { done: task.done });
-        return task.done; // Return new state
+        return task.done;
     }
 
     async updateGradual(id, delta) {
         const task = this.tasks.find(t => t.id === id);
         if(!task) return;
         let newVal = Math.min(Math.max(task.current + delta, 0), task.target);
+        if(newVal !== task.current) vibrate(30);
         task.current = newVal;
         await updateDoc(doc(db, `users/${this.user.uid}/tasks`, id), { current: newVal });
         return task;
     }
 
     async deleteItem(collectionName, id) {
+        vibrate(50);
         if(confirm("Supprimer cet élément ?")) {
             await deleteDoc(doc(db, `users/${this.user.uid}/${collectionName}`, id));
             await this.refresh();
             return true;
         }
         return false;
+    }
+    
+    async deleteItemDirect(collectionName, id) {
+        await deleteDoc(doc(db, `users/${this.user.uid}/${collectionName}`, id));
+        await this.refresh();
+        return true;
     }
 }
 
@@ -132,9 +211,7 @@ class UI {
         this.store = store;
         this.currentView = 'view-list';
         this.searchTerm = '';
-        this.activeFilter = 'all'; // 'all' or folderId
-        
-        // DOM Elements
+        this.activeFilter = 'all'; 
         this.els = {
             list: document.getElementById('view-list'),
             calendar: document.getElementById('view-calendar'),
@@ -149,7 +226,8 @@ class UI {
             fab: document.getElementById('fab-add'),
             projectGrid: document.getElementById('projects-grid'),
             tagsList: document.getElementById('tags-list'),
-            currentProfileName: document.getElementById('current-profile-name')
+            currentProfileName: document.getElementById('current-profile-name'),
+            profileBtn: document.getElementById('btn-edit-profile')
         };
     }
 
@@ -169,11 +247,35 @@ class UI {
         this.els.nav.classList.remove('hidden');
         this.els.fab.classList.remove('hidden');
         this.els.filters.classList.remove('hidden');
-        
-        // Afficher le nom du profil
-        this.els.currentProfileName.innerText = this.store.user.name;
-
+        this.updateProfileDisplay();
         this.render();
+    }
+
+    updateProfileDisplay() {
+        if (!this.store.user) return;
+        this.els.currentProfileName.innerText = this.store.user.name;
+        const btn = this.els.profileBtn;
+        const color = this.store.user.color;
+        btn.style = '';
+        btn.className = `flex items-center gap-2 px-2 py-1 rounded transition-colors group`;
+        if (color.startsWith('#')) {
+            btn.style.backgroundColor = hexToRgba(color, 0.15);
+            btn.style.color = color;
+            const icon = btn.querySelector('i');
+            if(icon) icon.className = "ph ph-pencil-simple text-xs opacity-50 group-hover:opacity-100";
+        } else {
+            const colorMap = {
+                'blue': 'text-blue-600 bg-blue-100',
+                'purple': 'text-purple-600 bg-purple-100',
+                'green': 'text-green-600 bg-green-100',
+                'red': 'text-red-600 bg-red-100',
+                'yellow': 'text-yellow-600 bg-yellow-100',
+            };
+            const classes = colorMap[color] || colorMap['blue'];
+            btn.classList.add(...classes.split(' '));
+            const icon = btn.querySelector('i');
+            if(icon) icon.className = "ph ph-pencil-simple text-gray-400 group-hover:text-brand text-xs";
+        }
     }
 
     render() {
@@ -183,45 +285,42 @@ class UI {
         else if(this.currentView === 'view-projects') this.renderProjectsView();
     }
 
-    // --- FILTRES (DOSSIERS) ---
     renderFilters() {
         let html = `<button class="px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${this.activeFilter === 'all' ? 'bg-black text-white' : 'bg-gray-200 text-gray-600'}" data-filter="all">Tout</button>`;
-        
         this.store.folders.forEach(f => {
             const isActive = this.activeFilter === f.id;
             const cls = isActive ? 'bg-brand text-white' : 'bg-white border border-gray-200 text-gray-600';
             html += `<button class="px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${cls}" data-filter="${f.id}">${f.name}</button>`;
         });
-
         this.els.filters.innerHTML = html;
         this.els.filters.querySelectorAll('button').forEach(btn => {
             btn.onclick = () => { this.activeFilter = btn.dataset.filter; this.render(); };
         });
     }
 
-    // --- VUE LISTE ---
     renderListView() {
         this.els.list.innerHTML = '';
-
         const matchFilter = (t) => {
             const matchSearch = t.title.toLowerCase().includes(this.searchTerm.toLowerCase());
             const matchFolder = this.activeFilter === 'all' || t.folderId === this.activeFilter;
             return matchSearch && matchFolder;
         };
 
-        // 1. Deadlines
         this.store.deadlines.forEach(dl => {
             const tasks = this.store.getTasksForDeadline(dl.id).filter(matchFilter);
             if(tasks.length === 0 && !dl.title.toLowerCase().includes(this.searchTerm.toLowerCase())) return;
-
             const daysLeft = Math.ceil((new Date(dl.date) - new Date()) / (1000 * 60 * 60 * 24));
-            const dlColor = COLORS_CONFIG[dl.color] || 'text-gray-800';
+            
+            let titleStyle = '';
+            let titleClass = 'text-lg font-bold';
+            if (dl.color.startsWith('#')) titleStyle = `color: ${dl.color}`;
+            else titleClass += ` ${COLORS_CONFIG[dl.color] || 'text-gray-800'}`;
 
             const div = document.createElement('div');
             div.className = 'card-anim mb-4';
             div.innerHTML = `
                 <div class="flex items-baseline justify-between mb-2 border-b border-gray-100 pb-1 group">
-                    <h2 class="text-lg font-bold ${dlColor}">${dl.title}</h2>
+                    <h2 class="${titleClass}" style="${titleStyle}">${dl.title}</h2>
                     <div class="flex items-center gap-2">
                          <span class="text-xs font-mono font-medium text-gray-400">${daysLeft}j</span>
                          <button class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" data-del-dl="${dl.id}"><i class="ph ph-trash"></i></button>
@@ -231,12 +330,10 @@ class UI {
             `;
             const container = div.querySelector('.task-container');
             tasks.forEach(t => container.appendChild(this.createTaskEl(t)));
-            
             div.querySelector('[data-del-dl]').onclick = async () => { if(await this.store.deleteItem("deadlines", dl.id)) this.render(); };
             this.els.list.appendChild(div);
         });
 
-        // 2. Orphelins
         const orphanTasks = this.store.getOrphanTasks().filter(matchFilter);
         if(orphanTasks.length > 0) {
             const div = document.createElement('div');
@@ -249,17 +346,98 @@ class UI {
     }
 
     createTaskEl(task) {
-        const el = document.createElement('div');
-        el.className = 'bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-2 relative group';
+        const container = document.createElement('div');
+        container.className = 'relative overflow-hidden rounded-xl h-full select-none';
+
+        const bgLayer = document.createElement('div');
+        bgLayer.className = 'absolute inset-0 flex justify-between items-center px-4 z-0 text-white font-bold pointer-events-none';
+        bgLayer.innerHTML = `
+            <div class="flex items-center gap-2 opacity-0 transition-opacity duration-200" id="bg-complete"><i class="ph ph-check text-xl"></i></div>
+            <div class="flex items-center gap-2 opacity-0 transition-opacity duration-200" id="bg-delete"><i class="ph ph-trash text-xl"></i></div>
+        `;
+        container.appendChild(bgLayer);
+
+        const content = document.createElement('div');
+        content.className = 'bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative z-10 transition-transform duration-100 ease-out flex flex-col gap-2';
         
-        // Suppression
+        let startX = 0;
+        let currentX = 0;
+        let isDragging = false;
+        const THRESHOLD = 100;
+
+        const resetSwipe = () => {
+            content.style.transform = `translateX(0px)`;
+            bgLayer.querySelector('#bg-complete').style.opacity = 0;
+            bgLayer.querySelector('#bg-delete').style.opacity = 0;
+            container.style.backgroundColor = 'transparent';
+        };
+
+        const handleStart = (e) => {
+            startX = e.touches ? e.touches[0].clientX : e.clientX;
+            isDragging = true;
+            content.style.transition = 'none';
+        };
+
+        const handleMove = (e) => {
+            if (!isDragging) return;
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            const delta = x - startX;
+            currentX = delta;
+
+            if (delta > 150) currentX = 150 + (delta - 150) * 0.2;
+            if (delta < -150) currentX = -150 + (delta + 150) * 0.2;
+
+            content.style.transform = `translateX(${currentX}px)`;
+
+            if (currentX > 0) {
+                container.style.backgroundColor = '#10b981';
+                bgLayer.querySelector('#bg-complete').style.opacity = Math.min(currentX / 80, 1);
+                bgLayer.querySelector('#bg-delete').style.opacity = 0;
+            } else {
+                container.style.backgroundColor = '#ef4444';
+                bgLayer.querySelector('#bg-delete').style.opacity = Math.min(Math.abs(currentX) / 80, 1);
+                bgLayer.querySelector('#bg-complete').style.opacity = 0;
+            }
+        };
+
+        const handleEnd = async () => {
+            if (!isDragging) return;
+            isDragging = false;
+            content.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+
+            if (currentX > THRESHOLD) {
+                content.style.transform = `translateX(100%)`;
+                vibrate(100);
+                setTimeout(async () => {
+                    const newDone = await this.store.toggleTask(task.id);
+                    if (newDone) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                    this.render();
+                }, 200);
+            } else if (currentX < -THRESHOLD) {
+                content.style.transform = `translateX(-100%)`;
+                vibrate(100);
+                setTimeout(async () => {
+                    await this.store.deleteItemDirect("tasks", task.id);
+                    this.render();
+                }, 200);
+            } else {
+                resetSwipe();
+            }
+        };
+
+        content.addEventListener('touchstart', handleStart, {passive: true});
+        content.addEventListener('touchmove', handleMove, {passive: true});
+        content.addEventListener('touchend', handleEnd);
+        content.addEventListener('mousedown', handleStart);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', (e) => { if(isDragging) handleEnd(); });
+
         const delBtn = document.createElement('button');
-        delBtn.className = 'absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity';
+        delBtn.className = 'absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block';
         delBtn.innerHTML = '<i class="ph ph-trash"></i>';
         delBtn.onclick = async (e) => { e.stopPropagation(); if(await this.store.deleteItem("tasks", task.id)) this.render(); };
-        el.appendChild(delBtn);
+        content.appendChild(delBtn);
 
-        // Metadata (Tag + Folder)
         let metaHtml = '';
         if(task.tagId) {
             const tag = this.store.getTag(task.tagId);
@@ -267,10 +445,19 @@ class UI {
         }
         if(task.folderId) {
             const folder = this.store.getFolder(task.folderId);
-            if(folder) metaHtml += `<span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">📁 ${folder.name}</span>`;
+            if(folder) {
+                // Modification : Utilisation de la couleur du dossier pour le badge
+                const badgeColorClass = FOLDER_COLORS[folder.color] || 'bg-gray-100 text-gray-600';
+                metaHtml += `<span class="text-[9px] px-1.5 py-0.5 rounded ${badgeColorClass}">📁 ${folder.name}</span>`;
+            }
         }
         if(task.duration > 0) {
              metaHtml += `<span class="text-[9px] px-1.5 py-0.5 rounded text-gray-400 ml-1">⏱️ ${task.duration}min</span>`;
+        }
+        if(task.date) {
+            const dateObj = new Date(task.date);
+            const dateStr = dateObj.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
+            metaHtml += `<span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 ml-1">📅 ${dateStr}</span>`;
         }
 
         const metaDiv = metaHtml ? `<div class="mb-1">${metaHtml}</div>` : '';
@@ -279,26 +466,20 @@ class UI {
             const inner = document.createElement('div');
             inner.className = 'flex items-start gap-3 pr-6';
             inner.innerHTML = `
-                <label class="checkbox-wrapper relative cursor-pointer w-6 h-6 flex-shrink-0 mt-0.5">
+                <div class="checkbox-wrapper relative cursor-pointer w-6 h-6 flex-shrink-0 mt-0.5 pointer-events-none">
                     <input type="checkbox" class="sr-only" ${task.done ? 'checked' : ''}>
                     <div class="w-6 h-6 border-2 border-gray-300 rounded-full flex items-center justify-center transition-colors">
                         <i class="ph ph-check text-white text-sm opacity-0 transform scale-50 transition-all duration-200 font-bold"></i>
                     </div>
-                </label>
+                </div>
                 <div class="flex-1 min-w-0">
                     <p class="${task.done ? 'text-gray-400 line-through' : 'text-gray-800'} text-sm font-medium transition-colors">${task.title}</p>
                     ${metaDiv}
                     ${task.description ? `<p class="text-xs text-gray-500 mt-1 line-clamp-2">${task.description}</p>` : ''}
                 </div>
             `;
-            inner.querySelector('input').addEventListener('change', async (e) => {
-                const newDone = await this.store.toggleTask(task.id);
-                this.render();
-                if(newDone) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-            });
-            el.appendChild(inner);
+            content.appendChild(inner);
         } else {
-            // GRADUAL
             const ratio = (task.current / task.target) * 100;
             const inner = document.createElement('div');
             inner.className = 'w-full pr-4';
@@ -312,73 +493,92 @@ class UI {
                     <div class="h-full bg-brand progress-bar" style="width: ${ratio}%"></div>
                 </div>
                 <div class="flex gap-3">
-                    <button class="flex-1 py-1 bg-gray-100 rounded-lg text-gray-600 text-sm hover:bg-gray-200" data-act="-1"><i class="ph ph-minus"></i></button>
-                    <button class="flex-1 py-1 bg-black text-white rounded-lg text-sm hover:opacity-80" data-act="1"><i class="ph ph-plus"></i></button>
+                    <button class="flex-1 py-1 bg-gray-100 rounded-lg text-gray-600 text-sm active:bg-gray-300 touch-manipulation" data-act="-1"><i class="ph ph-minus"></i></button>
+                    <button class="flex-1 py-1 bg-black text-white rounded-lg text-sm active:opacity-80 touch-manipulation" data-act="1"><i class="ph ph-plus"></i></button>
                 </div>
             `;
             inner.querySelectorAll('button').forEach(btn => {
-                btn.onclick = async () => {
+                btn.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
+                btn.addEventListener('mousedown', (e) => e.stopPropagation());
+                btn.onclick = async (e) => {
+                    e.stopPropagation();
                     const taskUpdated = await this.store.updateGradual(task.id, parseInt(btn.dataset.act));
                     this.render();
                     if(taskUpdated.current === taskUpdated.target) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
                 };
             });
-            el.appendChild(inner);
+            content.appendChild(inner);
         }
-        return el;
+
+        container.appendChild(content);
+        return container;
     }
 
-    // --- VUE CALENDRIER ---
     renderCalendarView() {
         this.els.calGrid.innerHTML = '';
         const year = this.store.currentDate.getFullYear();
         const month = this.store.currentDate.getMonth();
-        
         this.els.calTitle.innerText = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(this.store.currentDate);
-
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
         let startDay = firstDay.getDay() || 7; 
-        
         for(let i=1; i<startDay; i++) this.els.calGrid.appendChild(document.createElement('div'));
-
         for(let d=1; d<=lastDay.getDate(); d++) {
             const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const isToday = new Date().toISOString().split('T')[0] === dateStr;
-            
             const cell = document.createElement('div');
             cell.className = `calendar-day flex flex-col items-center ${isToday ? 'today' : ''}`;
             cell.innerHTML = `<span class="text-[10px] font-bold text-gray-500 mb-1">${d}</span>`;
-
             this.store.deadlines.filter(dl => dl.date === dateStr).forEach(dl => {
                 const dot = document.createElement('div');
-                dot.className = `w-full text-[9px] truncate px-1 rounded bg-blue-100 text-blue-700 mb-0.5`;
+                if (dl.color.startsWith('#')) {
+                    dot.className = `w-full text-[9px] truncate px-1 rounded mb-0.5`;
+                    dot.style.backgroundColor = hexToRgba(dl.color, 0.15);
+                    dot.style.color = dl.color;
+                } else {
+                    const colorMap = {
+                        'blue': 'bg-blue-100 text-blue-700',
+                        'red': 'bg-red-100 text-red-700',
+                        'green': 'bg-green-100 text-green-700',
+                        'purple': 'bg-purple-100 text-purple-700',
+                        'yellow': 'bg-yellow-100 text-yellow-700'
+                    };
+                    dot.className = `w-full text-[9px] truncate px-1 rounded mb-0.5 ${colorMap[dl.color] || 'bg-gray-100 text-gray-700'}`;
+                }
                 dot.innerText = dl.title;
+                cell.appendChild(dot);
+            });
+            this.store.tasks.filter(t => t.date === dateStr && !t.done).forEach(t => {
+                const dot = document.createElement('div');
+                dot.className = `w-full text-[9px] truncate px-1 rounded mb-0.5 bg-gray-100 text-gray-700 border border-gray-200`;
+                dot.innerText = t.title;
                 cell.appendChild(dot);
             });
             this.els.calGrid.appendChild(cell);
         }
     }
 
-    // --- VUE PROJETS ---
     renderProjectsView() {
         this.els.projectGrid.innerHTML = '';
         this.store.folders.forEach(f => {
             const el = document.createElement('div');
             el.className = 'bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center justify-center relative group aspect-square hover:bg-gray-50 transition-colors cursor-pointer';
+            
+            // Modification: Utilisation de la couleur du dossier pour l'icône
+            const colorClass = FOLDER_ICON_COLORS[f.color] || 'text-yellow-400';
+            
             el.innerHTML = `
-                <i class="ph ph-folder-simple text-4xl text-yellow-400 mb-2"></i>
+                <i class="ph ph-folder-simple text-4xl ${colorClass} mb-2"></i>
                 <span class="font-medium text-sm text-center truncate w-full">${f.name}</span>
                 <button class="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100" data-del><i class="ph ph-trash"></i></button>
             `;
             el.querySelector('[data-del]').onclick = (e) => { e.stopPropagation(); this.store.deleteItem('folders', f.id).then(() => this.render()); };
             el.onclick = () => {
                 this.activeFilter = f.id;
-                document.querySelector('[data-target="view-list"]').click(); // Switch to list view with filter
+                document.querySelector('[data-target="view-list"]').click(); 
             };
             this.els.projectGrid.appendChild(el);
         });
-
         this.els.tagsList.innerHTML = '';
         this.store.tags.forEach(t => {
             const el = document.createElement('span');
@@ -390,45 +590,54 @@ class UI {
     }
 }
 
-// --- LOGIC ---
-document.addEventListener('DOMContentLoaded', async () => {
+const main = async () => {
     const store = new Store();
     const ui = new UI(store);
     
-    // GESTION PROFILES
+    const profileIds = ['default_profile_1', 'default_profile_2', 'default_profile_3'];
+    profileIds.forEach(async (id) => {
+        try {
+            const snap = await getDoc(doc(db, 'users', id));
+            if (snap.exists()) {
+                const d = snap.data();
+                updateHomeProfileButton(id, d.name, d.color);
+            }
+        } catch(e) { console.warn(`Profil ${id} non chargé`, e); }
+    });
+    
     const profiles = document.querySelectorAll('.profile-btn');
     profiles.forEach(btn => {
         btn.onclick = async () => {
             const profileId = btn.dataset.id;
             const profileName = btn.querySelector('span').innerText;
-            
-            // Simuler l'authentification
             const user = { uid: profileId, name: profileName };
-            
             await store.init(user);
             ui.showApp();
         };
     });
 
-    // Logout logic (Retour au choix du profil)
-    document.getElementById('logout-btn').onclick = () => {
-        store.user = null;
-        ui.showProfiles();
-    };
+    const logoutBtn = document.getElementById('logout-btn');
+    if(logoutBtn) {
+        logoutBtn.onclick = () => { store.user = null; ui.showProfiles(); };
+    }
+    const headerLogo = document.getElementById('header-logo');
+    if(headerLogo) {
+        headerLogo.onclick = () => { store.user = null; ui.showProfiles(); };
+    }
 
-    // Initial Nav Setup
     setupNav(ui);
     setupModal(store, ui);
     setupProjects(store, ui);
-});
+    setupProfileModal(store, ui);
 
-// --- HELPERS ---
+    console.log("✅ Application initialisée");
+};
+
 const setupNav = (ui) => {
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.replace('text-brand', 'text-gray-400'));
             btn.classList.replace('text-gray-400', 'text-brand');
-            
             ['view-list', 'view-calendar', 'view-projects'].forEach(v => document.getElementById(v).classList.add('hidden'));
             const target = btn.dataset.target;
             document.getElementById(target).classList.remove('hidden');
@@ -436,14 +645,84 @@ const setupNav = (ui) => {
             ui.render();
         });
     });
+    const searchInput = document.getElementById('search-input');
+    if(searchInput) {
+        searchInput.addEventListener('input', (e) => { ui.searchTerm = e.target.value; ui.render(); });
+    }
+    const prevMonth = document.getElementById('prev-month');
+    if(prevMonth) prevMonth.onclick = () => { ui.store.currentDate.setMonth(ui.store.currentDate.getMonth()-1); ui.render(); };
+    const nextMonth = document.getElementById('next-month');
+    if(nextMonth) nextMonth.onclick = () => { ui.store.currentDate.setMonth(ui.store.currentDate.getMonth()+1); ui.render(); };
+};
 
-    document.getElementById('search-input').addEventListener('input', (e) => {
-        ui.searchTerm = e.target.value;
-        ui.render();
+const setupProfileModal = (store, ui) => {
+    const modal = document.getElementById('modal-profile');
+    const content = document.getElementById('modal-profile-content');
+    const closeBtn = document.getElementById('modal-profile-close');
+    const btnEdit = document.getElementById('btn-edit-profile');
+    const form = document.getElementById('profile-form');
+    const colorPicker = document.getElementById('custom-color-picker');
+    const colorHex = document.getElementById('custom-color-hex');
+    const radioCustom = document.getElementById('radio-custom');
+
+    if(!modal) return;
+
+    colorPicker.addEventListener('input', (e) => {
+        colorHex.value = e.target.value;
+        radioCustom.checked = true;
+    });
+    colorHex.addEventListener('input', (e) => {
+        const val = e.target.value;
+        if(val.startsWith('#') && val.length === 7) {
+            colorPicker.value = val;
+            radioCustom.checked = true;
+        }
     });
 
-    document.getElementById('prev-month').onclick = () => { ui.store.currentDate.setMonth(ui.store.currentDate.getMonth()-1); ui.render(); };
-    document.getElementById('next-month').onclick = () => { ui.store.currentDate.setMonth(ui.store.currentDate.getMonth()+1); ui.render(); };
+    const open = () => {
+        document.getElementById('profile-name-input').value = store.user.name;
+        const currentColor = store.user.color;
+        if(currentColor.startsWith('#')) {
+            radioCustom.checked = true;
+            colorPicker.value = currentColor;
+            colorHex.value = currentColor;
+        } else {
+            const radio = form.querySelector(`input[value="${currentColor}"]`);
+            if(radio) radio.checked = true;
+            colorHex.value = '';
+        }
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            content.classList.replace('scale-95', 'scale-100');
+        }, 10);
+    };
+
+    const close = () => {
+        modal.classList.add('opacity-0');
+        content.classList.replace('scale-100', 'scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    };
+
+    btnEdit.onclick = open;
+    closeBtn.onclick = close;
+
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const name = formData.get('profileName');
+        let color = formData.get('profileColor') || 'blue';
+        if(color === 'custom') {
+            const hexVal = colorHex.value;
+            if(hexVal.startsWith('#') && (hexVal.length === 4 || hexVal.length === 7)) color = hexVal;
+            else color = colorPicker.value;
+        }
+        if(name) {
+            await store.updateProfile(name, color);
+            ui.updateProfileDisplay();
+            close();
+        }
+    };
 };
 
 const setupModal = (store, ui) => {
@@ -460,17 +739,34 @@ const setupModal = (store, ui) => {
         folderSelect: document.getElementById('folder-select'),
         tagSelect: document.getElementById('tag-select'),
         typeSelect: document.getElementById('task-type-select'),
-        targetField: document.getElementById('gradual-target-field')
+        targetField: document.getElementById('gradual-target-field'),
+        dlColorPicker: document.getElementById('dl-custom-color-picker'),
+        dlColorHex: document.getElementById('dl-custom-color-hex'),
+        dlRadioCustom: document.getElementById('dl-radio-custom')
     };
+
+    if(!els.fab) return;
+
+    if(els.dlColorPicker) {
+        els.dlColorPicker.addEventListener('input', (e) => {
+            els.dlColorHex.value = e.target.value;
+            els.dlRadioCustom.checked = true;
+        });
+        els.dlColorHex.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if(val.startsWith('#') && val.length === 7) {
+                els.dlColorPicker.value = val;
+                els.dlRadioCustom.checked = true;
+            }
+        });
+    }
 
     let mode = 'TASK';
 
     const open = () => {
-        // Populate Selects
         els.dlSelect.innerHTML = '<option value="">Aucune</option>' + store.deadlines.map(d => `<option value="${d.id}">${d.title}</option>`).join('');
         els.folderSelect.innerHTML = '<option value="">Aucun</option>' + store.folders.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
         els.tagSelect.innerHTML = '<option value="">Aucun</option>' + store.tags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
-        
         document.body.classList.add('modal-active');
         setTimeout(() => els.overlay.classList.remove('opacity-0'), 10);
     };
@@ -507,9 +803,18 @@ const setupModal = (store, ui) => {
 
     els.form.onsubmit = async (e) => {
         e.preventDefault();
-        const data = Object.fromEntries(new FormData(els.form).entries());
-        if(mode === 'DEADLINE') await store.addDeadline(data);
-        else await store.addTask(data);
+        const formData = new FormData(els.form);
+        const data = Object.fromEntries(formData.entries());
+        if(mode === 'DEADLINE') {
+            if(data.color === 'custom') {
+                const hexVal = els.dlColorHex.value;
+                if(hexVal.startsWith('#') && (hexVal.length === 4 || hexVal.length === 7)) data.color = hexVal;
+                else data.color = els.dlColorPicker.value;
+            }
+            await store.addDeadline(data);
+        } else {
+            await store.addTask(data);
+        }
         els.form.reset();
         close();
         ui.render();
@@ -517,20 +822,32 @@ const setupModal = (store, ui) => {
 };
 
 const setupProjects = (store, ui) => {
-    document.getElementById('btn-create-folder').onclick = async () => {
-        const input = document.getElementById('new-folder-name');
-        if(input.value.trim()) {
-            await store.addFolder(input.value.trim());
-            input.value = '';
-            ui.render();
-        }
-    };
-    document.getElementById('btn-create-tag').onclick = async () => {
-        const input = document.getElementById('new-tag-name');
-        if(input.value.trim()) {
-            await store.addTag(input.value.trim());
-            input.value = '';
-            ui.render();
-        }
-    };
+    const btnFolder = document.getElementById('btn-create-folder');
+    if(btnFolder) {
+        btnFolder.onclick = async () => {
+            const input = document.getElementById('new-folder-name');
+            // Récupération de la couleur choisie
+            const colorInput = document.querySelector('input[name="folderColor"]:checked');
+            const color = colorInput ? colorInput.value : 'gray';
+
+            if(input.value.trim()) {
+                await store.addFolder(input.value.trim(), color);
+                input.value = '';
+                ui.render();
+            }
+        };
+    }
+    const btnTag = document.getElementById('btn-create-tag');
+    if(btnTag) {
+        btnTag.onclick = async () => {
+            const input = document.getElementById('new-tag-name');
+            if(input.value.trim()) {
+                await store.addTag(input.value.trim());
+                input.value = '';
+                ui.render();
+            }
+        };
+    }
 };
+
+main();
