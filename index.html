@@ -29,30 +29,55 @@
 </head>
 <body class="bg-app-bg text-app-text h-screen flex flex-col overflow-hidden select-none">
 
-    <div id="auth-container" class="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6">
+    <div id="auth-container" class="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6 overflow-y-auto">
         <div class="w-full max-w-sm text-center">
             <h1 class="text-4xl font-bold text-brand mb-2 tracking-tighter">Deadliner</h1>
-            <p class="text-gray-400 mb-8">Qui est-ce ?</p>
+            <p class="text-gray-400 mb-6">Identification</p>
             
-            <div id="profiles-list" class="space-y-3">
-                <button class="profile-btn w-full p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center hover:bg-white hover:border-brand hover:shadow-md transition-all group" data-id="default_profile_1">
-                    <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold mr-4 text-sm">P1</div>
-                    <span class="font-bold text-gray-700 group-hover:text-brand">Profil 1</span>
-                    <i class="ph ph-caret-right ml-auto text-gray-300 group-hover:text-brand"></i>
-                </button>
+            <form id="auth-form" class="space-y-4">
+                <div class="relative mb-6">
+                    <i class="ph ph-user absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
+                    <input type="text" id="auth-pseudo" placeholder="Votre Pseudo" required 
+                        class="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-lg font-medium focus:ring-2 focus:ring-brand focus:outline-none placeholder-gray-400 text-center">
+                </div>
 
-                <button class="profile-btn w-full p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center hover:bg-white hover:border-brand hover:shadow-md transition-all group" data-id="default_profile_2">
-                    <div class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold mr-4 text-sm">P2</div>
-                    <span class="font-bold text-gray-700 group-hover:text-brand">Profil 2</span>
-                    <i class="ph ph-caret-right ml-auto text-gray-300 group-hover:text-brand"></i>
-                </button>
+                <div class="flex justify-center gap-4 mb-6" id="pin-dots">
+                    <div class="w-4 h-4 rounded-full bg-gray-200 transition-all duration-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-gray-200 transition-all duration-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-gray-200 transition-all duration-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-gray-200 transition-all duration-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-gray-200 transition-all duration-200"></div>
+                    <div class="w-4 h-4 rounded-full bg-gray-200 transition-all duration-200"></div>
+                </div>
 
-                <button class="profile-btn w-full p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center hover:bg-white hover:border-brand hover:shadow-md transition-all group" data-id="default_profile_3">
-                    <div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold mr-4 text-sm">P3</div>
-                    <span class="font-bold text-gray-700 group-hover:text-brand">Profil 3</span>
-                    <i class="ph ph-caret-right ml-auto text-gray-300 group-hover:text-brand"></i>
-                </button>
-            </div>
+                <div class="grid grid-cols-3 gap-4 mb-8 max-w-[260px] mx-auto select-none">
+                    <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="1">1</button>
+                    <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="2">2</button>
+                    <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="3">3</button>
+                    
+                    <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="4">4</button>
+                    <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="5">5</button>
+                    <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="6">6</button>
+                    
+                    <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="7">7</button>
+                    <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="8">8</button>
+                    <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="9">9</button>
+                    
+                    <div class="w-16 h-16"></div> <button type="button" class="keypad-btn w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-2xl font-bold text-gray-700 flex items-center justify-center transition-colors" data-val="0">0</button>
+                    <button type="button" class="w-16 h-16 rounded-full hover:bg-red-50 active:bg-red-100 text-red-500 flex items-center justify-center transition-colors" id="btn-delete-pin"><i class="ph ph-backspace text-2xl"></i></button>
+                </div>
+
+                <div id="auth-error" class="text-red-500 text-sm hidden mb-2"></div>
+
+                <div class="flex gap-3">
+                    <button type="submit" id="btn-login" class="flex-1 py-3 bg-black text-white font-bold rounded-xl shadow-lg hover:bg-gray-800 active:scale-95 transition-all">
+                        Connexion
+                    </button>
+                    <button type="button" id="btn-register" class="flex-1 py-3 bg-white border-2 border-black text-black font-bold rounded-xl hover:bg-gray-50 active:scale-95 transition-all">
+                        Créer
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 

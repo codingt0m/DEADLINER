@@ -1,4 +1,4 @@
-import { db, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, query, orderBy } from './firebase.js';
+import { db, auth, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, query, orderBy, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase.js';
 console.log("🚀 Firebase imported successfully");
 
 // --- CONFIG ---
@@ -44,35 +44,13 @@ const hexToRgba = (hex, alpha) => {
     return `rgba(${r},${g},${b},${alpha})`;
 };
 
-const updateHomeProfileButton = (id, name, color) => {
-    const btn = document.querySelector(`.profile-btn[data-id="${id}"]`);
-    if (!btn) return;
-    const span = btn.querySelector('span');
-    if (span && name) span.innerText = name;
-    const iconDiv = btn.querySelector('div:first-child');
-    if (iconDiv && color) {
-        if (color.startsWith('#')) {
-            const bg = hexToRgba(color, 0.15);
-            iconDiv.className = `w-10 h-10 rounded-full flex items-center justify-center font-bold mr-4 text-sm transition-colors`;
-            iconDiv.style.backgroundColor = bg;
-            iconDiv.style.color = color;
-        } else {
-            iconDiv.style = '';
-            const colorMap = {
-                'blue': ['bg-blue-100', 'text-blue-600'],
-                'purple': ['bg-purple-100', 'text-purple-600'],
-                'green': ['bg-green-100', 'text-green-600'],
-                'red': ['bg-red-100', 'text-red-600'],
-                'yellow': ['bg-yellow-100', 'text-yellow-600']
-            };
-            const classes = colorMap[color] || colorMap['blue'];
-            iconDiv.className = `w-10 h-10 rounded-full flex items-center justify-center font-bold mr-4 text-sm transition-colors ${classes.join(' ')}`;
-        }
-    }
-};
-
 const vibrate = (ms = 50) => {
     if (navigator.vibrate) navigator.vibrate(ms);
+};
+
+const getEmailFromPseudo = (pseudo) => {
+    const cleanPseudo = pseudo.trim().toLowerCase().replace(/\s+/g, '');
+    return `${cleanPseudo}@deadliner.app`;
 };
 
 // --- STORE ---
@@ -86,25 +64,35 @@ class Store {
         this.currentDate = new Date();
     }
 
-    col(name) { return collection(db, `users/${this.user.uid}/${name}`); }
+    col(name) { 
+        if(!this.user) return null;
+        return collection(db, `users/${this.user.uid}/${name}`); 
+    }
 
-    async init(userParams) {
+    async init(firebaseUser) {
+        if (!firebaseUser) {
+            this.user = null;
+            return;
+        }
+
         try {
-            const userDocRef = doc(db, 'users', userParams.uid);
+            const userDocRef = doc(db, 'users', firebaseUser.uid);
             const userSnap = await getDoc(userDocRef);
+            
             if (userSnap.exists()) {
                 const data = userSnap.data();
-                this.user = { uid: userParams.uid, name: data.name || userParams.name, color: data.color || 'blue' };
+                this.user = { 
+                    uid: firebaseUser.uid, 
+                    name: data.name || "Utilisateur", 
+                    color: data.color || 'blue' 
+                };
             } else {
-                this.user = { uid: userParams.uid, name: userParams.name, color: 'blue' };
-                await setDoc(userDocRef, { name: this.user.name, color: this.user.color });
+                this.user = { uid: firebaseUser.uid, name: "Nouveau", color: 'blue' };
             }
+            await this.refresh();
         } catch (e) {
             console.error("Erreur init user:", e);
-            this.user = { ...userParams, color: 'blue' }; 
         }
-        updateHomeProfileButton(this.user.uid, this.user.name, this.user.color);
-        await this.refresh();
     }
 
     async updateProfile(newName, newColor) {
@@ -113,7 +101,6 @@ class Store {
             await setDoc(doc(db, 'users', this.user.uid), { name: newName, color: newColor }, { merge: true });
             this.user.name = newName;
             this.user.color = newColor;
-            updateHomeProfileButton(this.user.uid, newName, newColor);
             return true;
         } catch (e) { return false; }
     }
@@ -160,7 +147,6 @@ class Store {
         await this.refresh();
     }
     
-    // Modification: Accepte un paramètre couleur
     async addFolder(name, color = 'gray') { 
         await addDoc(this.col("folders"), { name, color, createdAt: new Date().toISOString() }); 
         await this.refresh(); 
@@ -231,13 +217,17 @@ class UI {
         };
     }
 
-    showProfiles() {
+    showLogin() {
         this.els.authContainer.classList.remove('hidden');
         this.els.mainContent.classList.add('hidden');
         this.els.header.classList.add('hidden');
         this.els.nav.classList.add('hidden');
         this.els.fab.classList.add('hidden');
         this.els.filters.classList.add('hidden');
+        
+        // Reset inputs
+        document.getElementById('auth-pseudo').value = '';
+        document.getElementById('auth-error').classList.add('hidden');
     }
 
     showApp() {
@@ -446,7 +436,6 @@ class UI {
         if(task.folderId) {
             const folder = this.store.getFolder(task.folderId);
             if(folder) {
-                // Modification : Utilisation de la couleur du dossier pour le badge
                 const badgeColorClass = FOLDER_COLORS[folder.color] || 'bg-gray-100 text-gray-600';
                 metaHtml += `<span class="text-[9px] px-1.5 py-0.5 rounded ${badgeColorClass}">📁 ${folder.name}</span>`;
             }
@@ -594,36 +583,114 @@ const main = async () => {
     const store = new Store();
     const ui = new UI(store);
     
-    const profileIds = ['default_profile_1', 'default_profile_2', 'default_profile_3'];
-    profileIds.forEach(async (id) => {
-        try {
-            const snap = await getDoc(doc(db, 'users', id));
-            if (snap.exists()) {
-                const d = snap.data();
-                updateHomeProfileButton(id, d.name, d.color);
-            }
-        } catch(e) { console.warn(`Profil ${id} non chargé`, e); }
-    });
+    // GESTION AUTHENTIFICATION (LOGIN/REGISTER)
+    const errorMsg = document.getElementById('auth-error');
     
-    const profiles = document.querySelectorAll('.profile-btn');
-    profiles.forEach(btn => {
-        btn.onclick = async () => {
-            const profileId = btn.dataset.id;
-            const profileName = btn.querySelector('span').innerText;
-            const user = { uid: profileId, name: profileName };
-            await store.init(user);
-            ui.showApp();
+    // Switch between modes handled by checking which button submitted, or just buttons actions
+    const btnLogin = document.getElementById('btn-login');
+    const btnRegister = document.getElementById('btn-register');
+
+    // PIN KEYPAD LOGIC
+    let currentPin = '';
+
+    const updatePinVisuals = () => {
+        const dots = document.querySelectorAll('#pin-dots div');
+        dots.forEach((dot, index) => {
+            if (index < currentPin.length) {
+                dot.className = "w-4 h-4 rounded-full bg-black transition-colors transform scale-110";
+            } else {
+                dot.className = "w-4 h-4 rounded-full bg-gray-200 transition-colors";
+            }
+        });
+    };
+
+    document.querySelectorAll('.keypad-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.preventDefault(); // Prevent focus loss or form submit issues if any
+            if(currentPin.length < 6) {
+                currentPin += btn.dataset.val;
+                vibrate(20);
+                updatePinVisuals();
+            }
         };
     });
 
+    const btnDeletePin = document.getElementById('btn-delete-pin');
+    if(btnDeletePin) {
+        btnDeletePin.onclick = (e) => {
+            e.preventDefault();
+            if(currentPin.length > 0) {
+                currentPin = currentPin.slice(0, -1);
+                vibrate(20);
+                updatePinVisuals();
+            }
+        };
+    }
+
+    const handleAuth = async (isRegister) => {
+        const pseudoInput = document.getElementById('auth-pseudo');
+        const pseudo = pseudoInput.value.trim();
+        const pin = currentPin; // Utilisation de la variable interne
+        
+        errorMsg.classList.add('hidden');
+
+        if(pseudo.length < 2 || pin.length < 6) {
+            errorMsg.innerText = "Pseudo (2+ chars) et PIN complet requis.";
+            errorMsg.classList.remove('hidden');
+            vibrate(100);
+            return;
+        }
+
+        const email = getEmailFromPseudo(pseudo);
+
+        try {
+            if (isRegister) {
+                const cred = await createUserWithEmailAndPassword(auth, email, pin);
+                await store.init(cred.user);
+                await store.updateProfile(pseudo, 'blue'); 
+            } else {
+                await signInWithEmailAndPassword(auth, email, pin);
+            }
+        } catch (error) {
+            console.error(error);
+            let msg = "Erreur inconnue.";
+            if(error.code === 'auth/wrong-password') msg = "Code PIN incorrect.";
+            if(error.code === 'auth/user-not-found') msg = "Compte introuvable. Créez-le d'abord.";
+            if(error.code === 'auth/email-already-in-use') msg = "Ce pseudo est déjà pris.";
+            if(error.code === 'auth/weak-password') msg = "Le code doit faire 6 chiffres.";
+            if(error.code === 'auth/invalid-email') msg = "Pseudo invalide.";
+            errorMsg.innerText = msg;
+            errorMsg.classList.remove('hidden');
+            vibrate(100);
+        }
+    };
+
+    btnLogin.onclick = (e) => { e.preventDefault(); handleAuth(false); };
+    btnRegister.onclick = (e) => { e.preventDefault(); handleAuth(true); };
+
+    // Logout
     const logoutBtn = document.getElementById('logout-btn');
-    if(logoutBtn) {
-        logoutBtn.onclick = () => { store.user = null; ui.showProfiles(); };
-    }
+    if(logoutBtn) logoutBtn.onclick = () => signOut(auth);
+    
     const headerLogo = document.getElementById('header-logo');
-    if(headerLogo) {
-        headerLogo.onclick = () => { store.user = null; ui.showProfiles(); };
-    }
+    if(headerLogo) headerLogo.onclick = () => signOut(auth);
+
+    // AUTH STATE LISTENER
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            console.log("Utilisateur connecté:", user.email);
+            await store.init(user);
+            ui.showApp();
+            currentPin = ''; // Reset pin for security
+            updatePinVisuals();
+        } else {
+            console.log("Utilisateur déconnecté");
+            store.user = null;
+            currentPin = '';
+            updatePinVisuals();
+            ui.showLogin();
+        }
+    });
 
     setupNav(ui);
     setupModal(store, ui);
