@@ -1,5 +1,5 @@
 import { db, auth, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, query, orderBy, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase.js';
-console.log("Projet connecté :", auth.app.options.projectId);
+console.log("🚀 Firebase imported successfully");
 
 // --- CONFIG ---
 const COLORS_CONFIG = {
@@ -583,34 +583,12 @@ const main = async () => {
     const store = new Store();
     const ui = new UI(store);
     
-    // AUTH LOGIC
-    let isRegisterMode = false;
-    const authTitle = document.getElementById('auth-sub-title');
-    const btnAuthAction = document.getElementById('btn-auth-action');
-    const btnSwitchAuth = document.getElementById('btn-switch-auth');
-    const authSwitchLabel = document.getElementById('auth-switch-label');
+    // GESTION AUTHENTIFICATION (LOGIN/REGISTER)
     const errorMsg = document.getElementById('auth-error');
-
-    const updateAuthUI = () => {
-        if (isRegisterMode) {
-            authTitle.innerText = "Création de compte";
-            btnAuthAction.innerText = "S'inscrire";
-            authSwitchLabel.innerText = "Déjà un compte ?";
-            btnSwitchAuth.innerText = "Se connecter";
-        } else {
-            authTitle.innerText = "Identification";
-            btnAuthAction.innerText = "Se connecter";
-            authSwitchLabel.innerText = "Vous n'avez pas encore de compte ?";
-            btnSwitchAuth.innerText = "Créer";
-        }
-        errorMsg.classList.add('hidden');
-    };
-
-    btnSwitchAuth.onclick = (e) => {
-        e.preventDefault();
-        isRegisterMode = !isRegisterMode;
-        updateAuthUI();
-    };
+    
+    // Switch between modes handled by checking which button submitted, or just buttons actions
+    const btnLogin = document.getElementById('btn-login');
+    const btnRegister = document.getElementById('btn-register');
 
     // PIN KEYPAD LOGIC
     let currentPin = '';
@@ -687,6 +665,35 @@ const main = async () => {
         }
     };
 
+    // AUTH LOGIC with Toggle
+    let isRegisterMode = false;
+    const authTitle = document.getElementById('auth-sub-title');
+    const btnAuthAction = document.getElementById('btn-auth-action');
+    const btnSwitchAuth = document.getElementById('btn-switch-auth');
+    const authSwitchLabel = document.getElementById('auth-switch-label');
+
+    const updateAuthUI = () => {
+        if (isRegisterMode) {
+            authTitle.innerText = "Création de compte";
+            btnAuthAction.innerText = "S'inscrire";
+            authSwitchLabel.innerText = "Déjà un compte ?";
+            btnSwitchAuth.innerText = "Se connecter";
+        } else {
+            authTitle.innerText = "Identification";
+            btnAuthAction.innerText = "Se connecter";
+            authSwitchLabel.innerText = "Vous n'avez pas encore de compte ?";
+            btnSwitchAuth.innerText = "Créer";
+        }
+        errorMsg.classList.add('hidden');
+    };
+
+    btnSwitchAuth.onclick = (e) => {
+        e.preventDefault();
+        isRegisterMode = !isRegisterMode;
+        updateAuthUI();
+    };
+
+    // Submit handler unique
     document.getElementById('auth-form').onsubmit = (e) => {
         e.preventDefault();
         handleAuth();
@@ -696,8 +703,15 @@ const main = async () => {
     const logoutBtn = document.getElementById('logout-btn');
     if(logoutBtn) logoutBtn.onclick = () => signOut(auth);
     
+    // Modification ICI : Logo -> Home (Liste des tâches)
     const headerLogo = document.getElementById('header-logo');
-    if(headerLogo) headerLogo.onclick = () => signOut(auth);
+    if(headerLogo) {
+        headerLogo.onclick = () => {
+            // Rediriger vers la vue liste via le bouton de navigation
+            const listBtn = document.querySelector('.nav-btn[data-target="view-list"]');
+            if(listBtn) listBtn.click();
+        };
+    }
 
     // AUTH STATE LISTENER
     onAuthStateChanged(auth, async (user) => {
