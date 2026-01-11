@@ -1,5 +1,5 @@
 import { db, auth, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, query, orderBy, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase.js';
-console.log("🚀 Firebase imported successfully");
+console.log("Projet connecté :", auth.app.options.projectId);
 
 // --- CONFIG ---
 const COLORS_CONFIG = {
