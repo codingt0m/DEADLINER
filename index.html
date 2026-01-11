@@ -32,7 +32,7 @@
     <div id="auth-container" class="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6 overflow-y-auto">
         <div class="w-full max-w-sm text-center">
             <h1 class="text-4xl font-bold text-brand mb-2 tracking-tighter">Deadliner</h1>
-            <p class="text-gray-400 mb-6">Identification</p>
+            <p id="auth-sub-title" class="text-gray-400 mb-6">Identification</p>
             
             <form id="auth-form" class="space-y-4">
                 <div class="relative mb-6">
@@ -67,13 +67,15 @@
                     <button type="button" class="w-16 h-16 rounded-full hover:bg-red-50 active:bg-red-100 text-red-500 flex items-center justify-center transition-colors" id="btn-delete-pin"><i class="ph ph-backspace text-2xl"></i></button>
                 </div>
 
-                <div id="auth-error" class="text-red-500 text-sm hidden mb-2"></div>
+                <div id="auth-error" class="text-red-500 text-sm hidden mb-4 font-medium"></div>
 
-                <div class="flex gap-3">
-                    <button type="submit" id="btn-login" class="flex-1 py-3 bg-black text-white font-bold rounded-xl shadow-lg hover:bg-gray-800 active:scale-95 transition-all">
-                        Connexion
-                    </button>
-                    <button type="button" id="btn-register" class="flex-1 py-3 bg-white border-2 border-black text-black font-bold rounded-xl hover:bg-gray-50 active:scale-95 transition-all">
+                <button type="submit" id="btn-auth-action" class="w-full py-3 bg-black text-white font-bold rounded-xl shadow-lg hover:bg-gray-800 active:scale-95 transition-all mb-4">
+                    Se connecter
+                </button>
+
+                <div class="text-center text-xs text-gray-400">
+                    <span id="auth-switch-label">Vous n'avez pas encore de compte ?</span>
+                    <button type="button" id="btn-switch-auth" class="font-bold text-gray-600 hover:text-black hover:underline ml-1 transition-colors">
                         Créer
                     </button>
                 </div>
@@ -212,7 +214,6 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Couleur</label>
-                        
                         <div class="flex flex-col gap-3">
                             <div class="flex gap-4 justify-between px-2">
                                 <label class="cursor-pointer relative group">

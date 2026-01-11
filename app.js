@@ -583,12 +583,34 @@ const main = async () => {
     const store = new Store();
     const ui = new UI(store);
     
-    // GESTION AUTHENTIFICATION (LOGIN/REGISTER)
+    // AUTH LOGIC
+    let isRegisterMode = false;
+    const authTitle = document.getElementById('auth-sub-title');
+    const btnAuthAction = document.getElementById('btn-auth-action');
+    const btnSwitchAuth = document.getElementById('btn-switch-auth');
+    const authSwitchLabel = document.getElementById('auth-switch-label');
     const errorMsg = document.getElementById('auth-error');
-    
-    // Switch between modes handled by checking which button submitted, or just buttons actions
-    const btnLogin = document.getElementById('btn-login');
-    const btnRegister = document.getElementById('btn-register');
+
+    const updateAuthUI = () => {
+        if (isRegisterMode) {
+            authTitle.innerText = "Création de compte";
+            btnAuthAction.innerText = "S'inscrire";
+            authSwitchLabel.innerText = "Déjà un compte ?";
+            btnSwitchAuth.innerText = "Se connecter";
+        } else {
+            authTitle.innerText = "Identification";
+            btnAuthAction.innerText = "Se connecter";
+            authSwitchLabel.innerText = "Vous n'avez pas encore de compte ?";
+            btnSwitchAuth.innerText = "Créer";
+        }
+        errorMsg.classList.add('hidden');
+    };
+
+    btnSwitchAuth.onclick = (e) => {
+        e.preventDefault();
+        isRegisterMode = !isRegisterMode;
+        updateAuthUI();
+    };
 
     // PIN KEYPAD LOGIC
     let currentPin = '';
@@ -606,7 +628,7 @@ const main = async () => {
 
     document.querySelectorAll('.keypad-btn').forEach(btn => {
         btn.onclick = (e) => {
-            e.preventDefault(); // Prevent focus loss or form submit issues if any
+            e.preventDefault();
             if(currentPin.length < 6) {
                 currentPin += btn.dataset.val;
                 vibrate(20);
@@ -627,10 +649,10 @@ const main = async () => {
         };
     }
 
-    const handleAuth = async (isRegister) => {
+    const handleAuth = async () => {
         const pseudoInput = document.getElementById('auth-pseudo');
         const pseudo = pseudoInput.value.trim();
-        const pin = currentPin; // Utilisation de la variable interne
+        const pin = currentPin;
         
         errorMsg.classList.add('hidden');
 
@@ -644,7 +666,7 @@ const main = async () => {
         const email = getEmailFromPseudo(pseudo);
 
         try {
-            if (isRegister) {
+            if (isRegisterMode) {
                 const cred = await createUserWithEmailAndPassword(auth, email, pin);
                 await store.init(cred.user);
                 await store.updateProfile(pseudo, 'blue'); 
@@ -655,7 +677,7 @@ const main = async () => {
             console.error(error);
             let msg = "Erreur inconnue.";
             if(error.code === 'auth/wrong-password') msg = "Code PIN incorrect.";
-            if(error.code === 'auth/user-not-found') msg = "Compte introuvable. Créez-le d'abord.";
+            if(error.code === 'auth/user-not-found') msg = "Compte introuvable.";
             if(error.code === 'auth/email-already-in-use') msg = "Ce pseudo est déjà pris.";
             if(error.code === 'auth/weak-password') msg = "Le code doit faire 6 chiffres.";
             if(error.code === 'auth/invalid-email') msg = "Pseudo invalide.";
@@ -665,8 +687,10 @@ const main = async () => {
         }
     };
 
-    btnLogin.onclick = (e) => { e.preventDefault(); handleAuth(false); };
-    btnRegister.onclick = (e) => { e.preventDefault(); handleAuth(true); };
+    document.getElementById('auth-form').onsubmit = (e) => {
+        e.preventDefault();
+        handleAuth();
+    };
 
     // Logout
     const logoutBtn = document.getElementById('logout-btn');
@@ -681,7 +705,7 @@ const main = async () => {
             console.log("Utilisateur connecté:", user.email);
             await store.init(user);
             ui.showApp();
-            currentPin = ''; // Reset pin for security
+            currentPin = ''; 
             updatePinVisuals();
         } else {
             console.log("Utilisateur déconnecté");
